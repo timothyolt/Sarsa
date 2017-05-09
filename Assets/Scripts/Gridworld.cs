@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using UnityEngine;
+using UnityEngine.UI;
 using Random = UnityEngine.Random;
 
 namespace Sarsa
@@ -24,6 +25,7 @@ namespace Sarsa
 		[SerializeField] private GameObject _floorPrefab, _actorPrefab;
 		[SerializeField] private Color _ineligibleColor, _eligibleColor, _rewardColor;
 		[SerializeField] private GameObject _upPrefab, _downPrefab, _rightPrefab, _leftPrefab;
+		[SerializeField] private Text _text;
 
 		private StateGameObjects[,] _stateGameObjectses;
 		private GameObject _actor;
@@ -33,6 +35,8 @@ namespace Sarsa
 		private bool _breakTraining;
 		private bool _renderMaxArrows;
 		private bool _normalizeArrows;
+		private int _epoch;
+		private int _step;
 
 		private void Start() {
 			_reward = new int[Size,Size];
@@ -115,7 +119,15 @@ namespace Sarsa
 			// Normalize arrows to max = 1, min = 0
 			if (Input.GetKeyDown(KeyCode.X))
 				_normalizeArrows = !_normalizeArrows;
-			// Render scene
+			// Update text info
+			_text.text = $"Epsilon: {_epsilon}\n" +
+			             $"Epoch: {_epoch}\n" +
+			             $"Step: {_step}\n" +
+			             $"Epochs/Frame: {_epochYield} [1-10 Keys]\n" +
+			             $"Render steps: {_stepTime} [Space Key]\n" +
+			             $"Render only max arrows: {_renderMaxArrows} [Z Key]\n" +
+			             $"Normalize arrows: {_normalizeArrows} [X Key]";
+			// Update grid info
 			for (var x = 0; x < Size; x++)
 			for (var y = 0; y < Size; y++)
 			{
@@ -151,8 +163,8 @@ namespace Sarsa
 				}
 				else if (_normalizeArrows)
 				{
-					(var minValue, var minDirection) = q.Min;
-					(var maxValue, var maxDirection) = q.Max;
+					(var minValue, var _) = q.Min;
+					(var maxValue, var _) = q.Max;
 					var multiplier = 1 / (maxValue - minValue);
 					for (var d = (Direction) 0; d < (Direction) 4; d++)
 						stateGameObjects[d].transform.localScale = new Vector3((q[d] - minValue) * multiplier, (q[d] - minValue) * multiplier, 1);
@@ -167,7 +179,7 @@ namespace Sarsa
 		private IEnumerator Train()
 		{
 			var random = new System.Random();
-			for (var epoch = 0; epoch < int.MaxValue; epoch++)
+			for (_epoch = 0; _epoch < int.MaxValue; _epoch++)
 			{
 				// Initialize eligibility table
 				for (var x = 0; x < Size; x++)
@@ -178,7 +190,7 @@ namespace Sarsa
 				_actorY = random.Next(0, Size);
 				var action = (Direction) random.Next(0, 4);
 				// Steps
-				for (var step = 0; step < int.MaxValue; step++)
+				for (_step = 0; _step < int.MaxValue; _step++)
 				{
 					// Take action
 					var actorXPrime = _actorX;
@@ -233,7 +245,7 @@ namespace Sarsa
 				}
 				if (_breakTraining)
 					break;
-				if (epoch % _epochYield == 0)
+				if (_epoch % _epochYield == 0)
 					yield return null;
 				// Move towards exploitation
 				_epsilon = Math.Max(EpsilonFloor, _epsilon - EpsilonDecay);
