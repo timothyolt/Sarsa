@@ -41,7 +41,7 @@
                 var value = Data[0];
                 var direction = 0;
                 for (var i = 1; i < Data.Length; i++)
-                    if (Data[i] < value)
+                    if (Data[i] > value)
                     {
                         value = Data[i];
                         direction = i;
@@ -57,7 +57,7 @@
                 var value = Data[0];
                 var direction = 0;
                 for (var i = 1; i < Data.Length; i++)
-                    if (Data[i] > value)
+                    if (Data[i] < value)
                     {
                         value = Data[i];
                         direction = i;
