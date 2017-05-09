@@ -224,6 +224,7 @@ namespace Sarsa
 					var delta = reward + DiscountFactor * (reward < 0 ? 0 : _q[actorXPrime, actorYPrime][actionPrime]) - _q[_actorX, _actorY][action];
 					// Modify eligibility
 					_eligibility[_actorX, _actorY][action]++;
+					_eligibility[_actorX, _actorY][action.Opposite()]--;
 					// Update tables
 					for (var x = 0; x < Size; x++)
 					for (var y = 0; y < Size; y++)
