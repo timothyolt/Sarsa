@@ -93,8 +93,6 @@ namespace Sarsa
 			for (var y = 0; y < Size; y++)
 				if (_obstacles[x, y])
 				{
-					for (var d = (Direction) 0; d < (Direction) 4; d++)
-						_q[x, y][d] = 0;
 					if (x > 0)
 						_q[x - 1, y].Right = 0;
 					if (x < Size - 1)
