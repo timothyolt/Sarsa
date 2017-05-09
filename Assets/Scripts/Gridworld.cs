@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections;
-using System.Threading;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -14,10 +13,6 @@ namespace Sarsa
 		private static State[,] _eligibility;
 		private static int _actorX;
 		private static int _actorY;
-
-		//private static Thread _trainingThread;
-		//private static CancellationTokenSource _trainingCancel;
-		//private static int _seed = Environment.TickCount;
 
 		private const float LearnRate = 0.1f;
 		private const float DiscountFactor = 0.9f;
@@ -77,9 +72,6 @@ namespace Sarsa
 			_actorY = Random.Range(0, Size);
 			_actor = Instantiate(_actorPrefab);
 			StartCoroutine(Train());
-			//_trainingCancel = new CancellationTokenSource();
-			//_trainingThread = new Thread(Train);
-			//_trainingThread.Start();
 		}
 
 		private void Update()
@@ -118,10 +110,8 @@ namespace Sarsa
 
 		private static IEnumerator Train()
 		{
-			var random = new System.Random(); // new System.Random(Interlocked.Increment(ref _seed));
-			//var token = _trainingCancel.Token;
-			// Episodes
-			while (true) // (!token.IsCancellationRequested)
+			var random = new System.Random();
+			while (true)
 			{
 				// Initialize eligibility table
 				for (var x = 0; x < Size; x++)
@@ -149,7 +139,7 @@ namespace Sarsa
 							actorXPrime++;
 							break;
 						case Direction.Left:
-							actorYPrime--;
+							actorXPrime--;
 							break;
 						default:
 							throw new ArgumentOutOfRangeException();
@@ -159,11 +149,11 @@ namespace Sarsa
 						? -1
 						: _reward[actorXPrime, actorYPrime];
 					// Determine next action
-					var actionPrime = random.NextDouble() < _epsilon
+					var actionPrime = random.NextDouble() < _epsilon || reward < 0
 						? (Direction) random.Next(0, 4)
 						: _q[actorXPrime, actorYPrime].Max.Item2;
 					// Determine delta
-					var delta = reward + DiscountFactor * _q[actorXPrime, actorYPrime][actionPrime] - _q[_actorX, _actorY][action];
+					var delta = reward + DiscountFactor * (reward < 0 ? 0 : _q[actorXPrime, actorYPrime][actionPrime]) - _q[_actorX, _actorY][action];
 					// Modify eligibility
 					_eligibility[_actorX, _actorY][action]++;
 					// Update tables
@@ -186,11 +176,6 @@ namespace Sarsa
 				// Move towards exploitation
 				_epsilon = Math.Max(EpsilonFloor, _epsilon - EpsilonDecay);
 			}
-		}
-
-		private void OnDestroy()
-		{
-			//_trainingCancel?.Cancel();
 		}
 	}
 }
