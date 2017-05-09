@@ -8,18 +8,18 @@ namespace Sarsa
 	public class Gridworld : MonoBehaviour
 	{
 		private const int Size = 20;
-		private static int[,] _reward;
-		private static State[,] _q;
-		private static State[,] _eligibility;
-		private static int _actorX;
-		private static int _actorY;
+		private int[,] _reward;
+		private State[,] _q;
+		private State[,] _eligibility;
+		private int _actorX;
+		private int _actorY;
 
 		private const float LearnRate = 0.1f;
 		private const float DiscountFactor = 0.9f;
 		private const float EligibilityFactor = 0.9f;
-		private const float EpsilonDecay = 0.001f;
+		private const float EpsilonDecay = 0.0001f;
 		private const float EpsilonFloor = 0.05f;
-		private static float _epsilon = 0.9f;
+		private float _epsilon = 0.9f;
 
 		[SerializeField] private GameObject _floorPrefab, _actorPrefab;
 		[SerializeField] private Color _ineligibleColor, _eligibleColor, _rewardColor;
@@ -27,6 +27,12 @@ namespace Sarsa
 
 		private StateGameObjects[,] _stateGameObjectses;
 		private GameObject _actor;
+
+		private int _epochYield = 1;
+		private bool _stepTime;
+		private bool _breakTraining;
+		private bool _renderMaxArrows;
+		private bool _normalizeArrows;
 
 		private void Start() {
 			_reward = new int[Size,Size];
@@ -76,7 +82,40 @@ namespace Sarsa
 
 		private void Update()
 		{
-			Debug.Log($"Epsilon: {_epsilon}");
+			// Number of epochs between updates
+			if (Input.GetKeyDown(KeyCode.Alpha0))
+				_epochYield = 10;
+			else if (Input.GetKeyDown(KeyCode.Alpha9))
+				_epochYield = 9;
+			else if (Input.GetKeyDown(KeyCode.Alpha8))
+				_epochYield = 8;
+			else if (Input.GetKeyDown(KeyCode.Alpha7))
+				_epochYield = 7;
+			else if (Input.GetKeyDown(KeyCode.Alpha6))
+				_epochYield = 6;
+			else if (Input.GetKeyDown(KeyCode.Alpha5))
+				_epochYield = 5;
+			else if (Input.GetKeyDown(KeyCode.Alpha4))
+				_epochYield = 4;
+			else if (Input.GetKeyDown(KeyCode.Alpha3))
+				_epochYield = 3;
+			else if (Input.GetKeyDown(KeyCode.Alpha2))
+				_epochYield = 2;
+			else if (Input.GetKeyDown(KeyCode.Alpha1))
+				_epochYield = 1;
+			// Whether to animate every step
+			if (Input.GetKeyDown(KeyCode.Space))
+				_stepTime = !_stepTime;
+			// Kill the training loop
+			if (Input.GetKeyDown(KeyCode.Escape))
+				_breakTraining = true;
+			// Render only the max arrows
+			if (Input.GetKeyDown(KeyCode.Z))
+				_renderMaxArrows = !_renderMaxArrows;
+			// Normalize arrows to max = 1, min = 0
+			if (Input.GetKeyDown(KeyCode.X))
+				_normalizeArrows = !_normalizeArrows;
+			// Render scene
 			for (var x = 0; x < Size; x++)
 			for (var y = 0; y < Size; y++)
 			{
@@ -100,18 +139,35 @@ namespace Sarsa
 				}
 				// Arrow scale
 				var q = _q[x, y];
-				stateGameObjects.Up.transform.localScale = new Vector3(q.Up, q.Up, 1);
-				stateGameObjects.Down.transform.localScale = new Vector3(q.Down, q.Down, 1);
-				stateGameObjects.Right.transform.localScale = new Vector3(q.Right, q.Right, 1);
-				stateGameObjects.Left.transform.localScale = new Vector3(q.Left, q.Left, 1);
+				if (_renderMaxArrows)
+				{
+					(var value, var direction) = q.Max;
+					if (_normalizeArrows)
+						value = 1;
+					stateGameObjects[direction].transform.localScale = new Vector3(value, value, 1);
+					for (var d = (Direction) 0; d < (Direction) 4; d++)
+						if (d != direction)
+							stateGameObjects[d].transform.localScale = Vector3.zero;
+				}
+				else if (_normalizeArrows)
+				{
+					(var minValue, var minDirection) = q.Min;
+					(var maxValue, var maxDirection) = q.Max;
+					var multiplier = 1 / (maxValue - minValue);
+					for (var d = (Direction) 0; d < (Direction) 4; d++)
+						stateGameObjects[d].transform.localScale = new Vector3((q[d] - minValue) * multiplier, (q[d] - minValue) * multiplier, 1);
+				}
+				else
+					for (var d = (Direction) 0; d < (Direction) 4; d++)
+						stateGameObjects[d].transform.localScale = new Vector3(q[d], q[d], 1);
 			}
 			_actor.transform.position = new Vector3(_actorX, _actorY, 0);
 		}
 
-		private static IEnumerator Train()
+		private IEnumerator Train()
 		{
 			var random = new System.Random();
-			while (true)
+			for (var epoch = 0; epoch < int.MaxValue; epoch++)
 			{
 				// Initialize eligibility table
 				for (var x = 0; x < Size; x++)
@@ -122,7 +178,7 @@ namespace Sarsa
 				_actorY = random.Next(0, Size);
 				var action = (Direction) random.Next(0, 4);
 				// Steps
-				while (true) // (!token.IsCancellationRequested)
+				for (var step = 0; step < int.MaxValue; step++)
 				{
 					// Take action
 					var actorXPrime = _actorX;
@@ -159,10 +215,10 @@ namespace Sarsa
 					// Update tables
 					for (var x = 0; x < Size; x++)
 					for (var y = 0; y < Size; y++)
-					for (var d = 0; d < 4; d++)
+					for (var d = (Direction) 0; d < (Direction) 4; d++)
 					{
-						_q[x, y][(Direction) d] += LearnRate * delta * _eligibility[x, y][(Direction) d];
-						_eligibility[x, y][(Direction) d] *= EligibilityFactor * DiscountFactor;
+						_q[x, y][d] += LearnRate * delta * _eligibility[x, y][d];
+						_eligibility[x, y][d] *= EligibilityFactor * DiscountFactor;
 					}
 					// Check for terminal state
 					if (reward != 0)
@@ -171,8 +227,14 @@ namespace Sarsa
 					_actorX = actorXPrime;
 					_actorY = actorYPrime;
 					action = actionPrime;
-					yield return null;
+					// Draw each step
+					if (_stepTime)
+						yield return null;
 				}
+				if (_breakTraining)
+					break;
+				if (epoch % _epochYield == 0)
+					yield return null;
 				// Move towards exploitation
 				_epsilon = Math.Max(EpsilonFloor, _epsilon - EpsilonDecay);
 			}
