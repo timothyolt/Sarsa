@@ -23,7 +23,7 @@ namespace Sarsa
 		private float _epsilon = 0.9f;
 
 		[SerializeField] private GameObject _floorPrefab, _actorPrefab;
-		[SerializeField] private Color _ineligibleColor, _eligibleColor, _rewardColor;
+		[SerializeField] private Color _ineligibleColor, _eligibleColor, _rewardColor, _punishColor;
 		[SerializeField] private GameObject _upPrefab, _downPrefab, _rightPrefab, _leftPrefab;
 		[SerializeField] private Text _text;
 
@@ -44,9 +44,8 @@ namespace Sarsa
 			_eligibility = new State[Size,Size];
 			_stateGameObjectses = new StateGameObjects[Size,Size];
 			// initialization
-			var rewardX = Random.Range(0, Size);
-			var rewardY = Random.Range(0, Size);
-			_reward[rewardX, rewardY] = 1;
+			_reward[Random.Range(0, Size), Random.Range(0, Size)] = -1;
+			_reward[Random.Range(0, Size), Random.Range(0, Size)] = 1;
 			for (var x = 0; x < Size; x++)
 			for (var y = 0; y < Size; y++)
 			{
@@ -135,6 +134,8 @@ namespace Sarsa
 				// Floor color
 				if (_reward[x, y] == 1)
 					stateGameObjects.FloorMaterial.color = _rewardColor;
+				else if (_reward[x, y] == -1)
+					stateGameObjects.FloorMaterial.color = _punishColor;
 				else
 				{
 					// Find highest eligibility
