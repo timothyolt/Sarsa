@@ -367,8 +367,8 @@ MonoBehaviour:
     type: 2}
   _actorPrefab: {fileID: 1370418376859380, guid: fe5914b34cc8c074dba2aac08fc2bd15,
     type: 2}
-  _ineligibleColor: {r: 0.778, g: 0.88057935, b: 1, a: 1}
-  _eligibleColor: {r: 0.16600001, g: 0.56105274, b: 1, a: 1}
+  _ineligibleColor: {r: 0.054434203, g: 0.11923684, b: 0.197, a: 1}
+  _eligibleColor: {r: 0.22188154, g: 0.48602632, b: 0.803, a: 1}
   _rewardColor: {r: 0.109764695, g: 0.622, b: 0.17688525, a: 1}
   _punishColor: {r: 0.828, g: 0.142416, b: 0.142416, a: 1}
   _upPrefab: {fileID: 1959243973872776, guid: 44e8f83372d66804587b8c57ac77e4e5, type: 2}

@@ -9,21 +9,22 @@ namespace Sarsa
 	public class Gridworld : MonoBehaviour
 	{
 		private const int Size = 20;
-		private int[,] _reward;
+		private int[,] _rewards;
+		private bool[,] _obstacles;
 		private State[,] _q;
 		private State[,] _eligibility;
 		private int _actorX;
 		private int _actorY;
 
-		private const float LearnRate = 0.1f;
+		private const float LearnRate = 0.05f;
 		private const float DiscountFactor = 0.9f;
-		private const float EligibilityFactor = 0.9f;
-		private const float EpsilonDecay = 0.0001f;
-		private const float EpsilonFloor = 0.05f;
-		private float _epsilon = 0.9f;
+		private const float EligibilityFactor = 0.95f;
+		private const double EpsilonDecay = 0.00001;
+		private const double EpsilonFloor = 0.0001;
+		private double _epsilon = 0.75;
 
 		[SerializeField] private GameObject _floorPrefab, _actorPrefab;
-		[SerializeField] private Color _ineligibleColor, _eligibleColor, _rewardColor, _punishColor;
+		[SerializeField] private Color _ineligibleColor, _eligibleColor, _rewardColor, _punishColor, _obstacleColor;
 		[SerializeField] private GameObject _upPrefab, _downPrefab, _rightPrefab, _leftPrefab;
 		[SerializeField] private Text _text;
 
@@ -39,13 +40,15 @@ namespace Sarsa
 		private int _step;
 
 		private void Start() {
-			_reward = new int[Size,Size];
+			_rewards = new int[Size,Size];
 			_q = new State[Size,Size];
 			_eligibility = new State[Size,Size];
+			_obstacles = new bool[Size,Size];
 			_stateGameObjectses = new StateGameObjects[Size,Size];
 			// initialization
-			_reward[Random.Range(0, Size), Random.Range(0, Size)] = -1;
-			_reward[Random.Range(0, Size), Random.Range(0, Size)] = 1;
+			_rewards[Random.Range(0, Size), Random.Range(0, Size)] = -1;
+			_rewards[Random.Range(0, Size), Random.Range(0, Size)] = 1;
+			_obstacles[Random.Range(0, Size), Random.Range(0, Size)] = true;
 			for (var x = 0; x < Size; x++)
 			for (var y = 0; y < Size; y++)
 			{
@@ -77,6 +80,31 @@ namespace Sarsa
 					Left = Instantiate(_leftPrefab, statePosOffset, Quaternion.identity, transform)
 				};
 			}
+			// Strip Q-table of edges
+			for (var i = 0; i < Size; i++)
+			{
+				_q[i, 0].Left = 0;
+				_q[i, Size - 1].Right = 0;
+				_q[0, i].Down = 0;
+				_q[0, Size - 1].Up = 0;
+			}
+			// Strip Q-table of obstacles
+			for (var x = 0; x < Size; x++)
+			for (var y = 0; y < Size; y++)
+				if (_obstacles[x, y])
+				{
+					for (var d = (Direction) 0; d < (Direction) 4; d++)
+						_q[x, y][d] = 0;
+					if (x > 0)
+						_q[x - 1, y].Right = 0;
+					if (x < Size - 1)
+						_q[x + 1, y].Left = 0;
+					if (y > 0)
+						_q[x, y - 1].Up = 0;
+					if (y < Size - 1)
+						_q[x, y + 1].Down = 0;
+				}
+			// Place actor
 			_actorX = Random.Range(0, Size);
 			_actorY = Random.Range(0, Size);
 			_actor = Instantiate(_actorPrefab);
@@ -132,10 +160,12 @@ namespace Sarsa
 			{
 				var stateGameObjects = _stateGameObjectses[x, y];
 				// Floor color
-				if (_reward[x, y] == 1)
+				if (_rewards[x, y] > 0)
 					stateGameObjects.FloorMaterial.color = _rewardColor;
-				else if (_reward[x, y] == -1)
+				else if (_rewards[x, y] < 0)
 					stateGameObjects.FloorMaterial.color = _punishColor;
+				else if (_obstacles[x, y])
+					stateGameObjects.FloorMaterial.color = _obstacleColor;
 				else
 				{
 					// Find highest eligibility
@@ -214,18 +244,20 @@ namespace Sarsa
 							throw new ArgumentOutOfRangeException();
 					}
 					// Observe reward
-					var reward = actorXPrime < 0 || actorXPrime >= Size || actorYPrime < 0 || actorYPrime >= Size
-						? -1
-						: _reward[actorXPrime, actorYPrime];
+					var outOfBounds = actorXPrime < 0 || actorXPrime >= Size || actorYPrime < 0 || actorYPrime >= Size || _obstacles[actorXPrime, actorYPrime];
+					var reward = outOfBounds ? 0 : _rewards[actorXPrime, actorYPrime];
 					// Determine next action
-					var actionPrime = random.NextDouble() < _epsilon || reward < 0
+					var actionPrime = outOfBounds || random.NextDouble() < _epsilon
 						? (Direction) random.Next(0, 4)
-						: _q[actorXPrime, actorYPrime].Max.Item2;
+						: _epoch % 2 == 0
+							? _q[actorXPrime, actorYPrime].Max.Item2
+							: _q[actorXPrime, actorYPrime].Min.Item2;
 					// Determine delta
-					var delta = reward + DiscountFactor * (reward < 0 ? 0 : _q[actorXPrime, actorYPrime][actionPrime]) - _q[_actorX, _actorY][action];
+					var delta = reward + DiscountFactor * (outOfBounds ? 0 : _q[actorXPrime, actorYPrime][actionPrime]) - _q[_actorX, _actorY][action];
 					// Modify eligibility
 					_eligibility[_actorX, _actorY][action]++;
-					_eligibility[_actorX, _actorY][action.Opposite()]--;
+					if (!outOfBounds)
+						_eligibility[actorXPrime, actorYPrime][action.Opposite()]--;
 					// Update tables
 					for (var x = 0; x < Size; x++)
 					for (var y = 0; y < Size; y++)
@@ -235,7 +267,7 @@ namespace Sarsa
 						_eligibility[x, y][d] *= EligibilityFactor * DiscountFactor;
 					}
 					// Check for terminal state
-					if (reward != 0)
+					if (outOfBounds || reward != 0)
 						break;
 					// Move state and actions forward
 					_actorX = actorXPrime;
