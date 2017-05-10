@@ -8,6 +8,11 @@ namespace Sarsa
 {
 	public class Gridworld : MonoBehaviour
 	{
+		[SerializeField] private GameObject _floorPrefab, _actorPrefab;
+		[SerializeField] private Color _ineligibleColor, _eligibleColor, _rewardColor, _punishColor, _obstacleColor;
+		[SerializeField] private GameObject _upPrefab, _downPrefab, _rightPrefab, _leftPrefab;
+		[SerializeField] private Text _text;
+
 		private const int Size = 20;
 		private int[,] _rewards;
 		private bool[,] _obstacles;
@@ -16,28 +21,15 @@ namespace Sarsa
 		private int _actorX;
 		private int _actorY;
 
-		private const float LearnRate = 0.05f;
-		private const float DiscountFactor = 0.9f;
-		private const float EligibilityFactor = 0.95f;
-		private const double EpsilonDecay = 0.00001;
-		private const double EpsilonFloor = 0.0001;
-		private double _epsilon = 0.75;
-
-		[SerializeField] private GameObject _floorPrefab, _actorPrefab;
-		[SerializeField] private Color _ineligibleColor, _eligibleColor, _rewardColor, _punishColor, _obstacleColor;
-		[SerializeField] private GameObject _upPrefab, _downPrefab, _rightPrefab, _leftPrefab;
-		[SerializeField] private Text _text;
+		[SerializeField] private float _learnRate = 0.05f, _discountFactor = 0.9f, _eligibilityFactor = 0.95f;
+		[SerializeField] private double _epsilon = 0.75, _epsilonFloor = 0.0001, _epsilonDecay = 0.00001;
 
 		private StateGameObjects[,] _stateGameObjectses;
 		private GameObject _actor;
 
-		private int _epochYield = 1;
-		private bool _stepTime;
-		private bool _breakTraining;
-		private bool _renderMaxArrows;
-		private bool _normalizeArrows;
-		private int _epoch;
-		private int _step;
+		[SerializeField] private int _epochYield = 1;
+		[SerializeField] private bool _stepTime, _breakTraining, _renderMaxArrows, _normalizeArrows;
+		private int _epoch, _step;
 
 		private void Start() {
 			_rewards = new int[Size,Size];
@@ -48,13 +40,14 @@ namespace Sarsa
 			// initialization
 			_rewards[Random.Range(0, Size), Random.Range(0, Size)] = -1;
 			_rewards[Random.Range(0, Size), Random.Range(0, Size)] = 1;
-			_obstacles[Random.Range(0, Size), Random.Range(0, Size)] = true;
+			for (var i = 0; i < 10; i++)
+				_obstacles[Random.Range(0, Size), Random.Range(0, Size)] = true;
 			for (var x = 0; x < Size; x++)
 			for (var y = 0; y < Size; y++)
 			{
 				// Data
-				const float rangeLow = 0.001f;
-				const float rangeHigh = 0.01f;
+				const float rangeLow = 0.0001f;
+				const float rangeHigh = 0.001f;
 				_q[x,y] = new State
 				{
 					Up = Random.Range(rangeLow, rangeHigh),
@@ -81,13 +74,13 @@ namespace Sarsa
 				};
 			}
 			// Strip Q-table of edges
-			for (var i = 0; i < Size; i++)
-			{
-				_q[i, 0].Left = 0;
-				_q[i, Size - 1].Right = 0;
-				_q[0, i].Down = 0;
-				_q[0, Size - 1].Up = 0;
-			}
+//			for (var i = 0; i < Size; i++)
+//			{
+//				_q[i, 0].Left = 0;
+//				_q[i, Size - 1].Right = 0;
+//				_q[0, i].Down = 0;
+//				_q[0, Size - 1].Up = 0;
+//			}
 			// Strip Q-table of obstacles
 			for (var x = 0; x < Size; x++)
 			for (var y = 0; y < Size; y++)
@@ -144,6 +137,12 @@ namespace Sarsa
 			// Normalize arrows to max = 1, min = 0
 			if (Input.GetKeyDown(KeyCode.X))
 				_normalizeArrows = !_normalizeArrows;
+			// Seek policy
+			// Epsilon controls
+			if (Input.GetKeyDown(KeyCode.DownArrow))
+				_epsilon = Math.Max(0, _epsilon - 0.01);
+			if (Input.GetKeyDown(KeyCode.DownArrow))
+				_epsilon = Math.Min(1, _epsilon + 0.01);
 			// Update text info
 			_text.text = $"Epsilon: {_epsilon}\n" +
 			             $"Epoch: {_epoch}\n" +
@@ -215,32 +214,17 @@ namespace Sarsa
 				for (var y = 0; y < Size; y++)
 					_eligibility[x,y] = new State();
 				// Initialize state and action
-				_actorX = random.Next(0, Size);
-				_actorY = random.Next(0, Size);
+				do
+				{
+					_actorX = random.Next(0, Size);
+					_actorY = random.Next(0, Size);
+				} while (_rewards[_actorX, _actorY] != 0 && !_obstacles[_actorX, _actorY]);
 				var action = (Direction) random.Next(0, 4);
 				// Steps
 				for (_step = 0; _step < int.MaxValue; _step++)
 				{
 					// Take action
-					var actorXPrime = _actorX;
-					var actorYPrime = _actorY;
-					switch (action)
-					{
-						case Direction.Up:
-							actorYPrime++;
-							break;
-						case Direction.Down:
-							actorYPrime--;
-							break;
-						case Direction.Right:
-							actorXPrime++;
-							break;
-						case Direction.Left:
-							actorXPrime--;
-							break;
-						default:
-							throw new ArgumentOutOfRangeException();
-					}
+					(var actorXPrime, var actorYPrime) = action.Act(_actorX, _actorY);
 					// Observe reward
 					var outOfBounds = actorXPrime < 0 || actorXPrime >= Size || actorYPrime < 0 || actorYPrime >= Size || _obstacles[actorXPrime, actorYPrime];
 					var reward = outOfBounds ? 0 : _rewards[actorXPrime, actorYPrime];
@@ -251,18 +235,18 @@ namespace Sarsa
 							? _q[actorXPrime, actorYPrime].Max.Item2
 							: _q[actorXPrime, actorYPrime].Min.Item2;
 					// Determine delta
-					var delta = reward + DiscountFactor * (outOfBounds ? 0 : _q[actorXPrime, actorYPrime][actionPrime]) - _q[_actorX, _actorY][action];
+					var delta = reward + _discountFactor * (outOfBounds ? 0 : _q[actorXPrime, actorYPrime][actionPrime]) - _q[_actorX, _actorY][action];
 					// Modify eligibility
 					_eligibility[_actorX, _actorY][action]++;
-					if (!outOfBounds)
+					if (!outOfBounds && reward == 0)
 						_eligibility[actorXPrime, actorYPrime][action.Opposite()]--;
 					// Update tables
 					for (var x = 0; x < Size; x++)
 					for (var y = 0; y < Size; y++)
 					for (var d = (Direction) 0; d < (Direction) 4; d++)
 					{
-						_q[x, y][d] += LearnRate * delta * _eligibility[x, y][d];
-						_eligibility[x, y][d] *= EligibilityFactor * DiscountFactor;
+						_q[x, y][d] += _learnRate * delta * _eligibility[x, y][d];
+						_eligibility[x, y][d] *= _eligibilityFactor * _discountFactor;
 					}
 					// Check for terminal state
 					if (outOfBounds || reward != 0)
@@ -280,7 +264,7 @@ namespace Sarsa
 				if (_epoch % _epochYield == 0)
 					yield return null;
 				// Move towards exploitation
-				_epsilon = Math.Max(EpsilonFloor, _epsilon - EpsilonDecay);
+				_epsilon = Math.Max(_epsilonFloor, _epsilon - _epsilonDecay);
 			}
 		}
 	}

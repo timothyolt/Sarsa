@@ -25,5 +25,22 @@ namespace Sarsa
                     throw new ArgumentOutOfRangeException(nameof(direction), direction, null);
             }
         }
+
+        public static (int, int) Act(this Direction direction, int x, int y)
+        {
+            switch (direction)
+            {
+                case Direction.Up:
+                    return (x, ++y);
+                case Direction.Down:
+                    return (x, --y);
+                case Direction.Right:
+                    return (++x, y);
+                case Direction.Left:
+                    return (--x, y);
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+        }
     }
 }
